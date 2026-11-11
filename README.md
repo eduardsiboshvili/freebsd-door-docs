@@ -16,13 +16,13 @@ The [detailed contents](detailed-contents.md) links to individual sections.
 
 - [Glossary and notation](front-matter.md)
 
-### [Part I. Problem statement and requirements]
+### Part I. Problem statement and requirements
 
 - [1. Introduction](chapters/01.md)
 - [2. Doors model and FreeBSD context](chapters/02.md)
 - [3. Requirements and threat model](chapters/03.md)
 
-### [Part II. Architecture and implementation]
+### Part II. Architecture and implementation
 
 - [4. System architecture](chapters/04.md)
 - [5. FreeBSD kernel integration](chapters/05.md)
@@ -31,19 +31,19 @@ The [detailed contents](detailed-contents.md) links to individual sections.
 - [8. NameFS, DoorCTL, and service discovery](chapters/08.md)
 - [9. libdoor architecture](chapters/09.md)
 
-### [Part III. Observable semantics and correctness]
+### Part III. Observable semantics and correctness
 
 - [10. ABI and operation semantics](chapters/10.md)
 - [11. Locks, references, and lifetime](chapters/11.md)
 - [12. Race safety and failure protocols](chapters/12.md)
 - [13. Security model](chapters/13.md)
 
-### [Part IV. Programming and verification]
+### Part IV. Programming and verification
 
 - [14. Programming guide](chapters/14.md)
 - [15. Verification methodology](chapters/15.md)
 
-### [Part V. Discussion and conclusions]
+### Part V. Discussion and conclusions
 
 - [16. Design decisions and limitations](chapters/16.md)
 - [17. FreeBSD and illumos implementation differences](chapters/17.md)
