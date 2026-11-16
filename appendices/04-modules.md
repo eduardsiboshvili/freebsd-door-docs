@@ -32,13 +32,14 @@ code does; deployment qualification and benchmarks remain separate records.
 | Database adapter | `app/pgsql_service.c`, `pgsql_door.inc` | SQL statements, read-path selection, result-to-JSON conversion |
 | PGDoor server | `postgres/pg_door.c` | Background workers, raw Door receive loop, sessions, SPI transactions |
 | PGDoor encoding/mapping | `postgres/pgd_encode.h`, `pgd_mapping.h`, `pgd_params.h` | Checked cell encoding, shared-mapping references, typed values |
-| PGDoor library | `postgres/pgd_client.c`, `pgd_client.h`, `pgd_wire.h` | Connection/arena registration, bounded query calls, cell framing |
+| PGDoor library | `postgres/pgd_client.c`, `pgd_client.h`, `pgd_wire.h`, `pgd_pair.h` | Connection and arena registration, synchronous and batched queries, cell framing |
 | Build/config/lifecycle | `tools/build-nginx.py`, `build-app.py`, `app_config.py`, `stack.py` | Independent builds, TOML translation, coordinated app/nginx startup |
 
 The important boundaries are HTTP client↔nginx, nginx↔application, and
-application↔database. Pair is currently used on the second boundary. The
-implemented PGDoor path uses synchronous CALL plus persistent result SHM on the
-third. It does **not** use Pair to execute PostgreSQL queries.
+application↔database. Pair is currently used on the second boundary. On the third
+boundary, ordinary PGDoor uses synchronous CALL plus persistent result SHM.
+A separate PGDoor mode batches SQL over SHM + Pair; the HTTP blog does not
+use that mode.
 
 ```mermaid
 flowchart TD
@@ -445,6 +446,36 @@ or an arena belonging to a different Door generation. `pgd_result_data()` return
 a borrowed pointer valid only while the arena/range is retained and not reused.
 See the complete typed-parameter client in §14.20.
 
+<a id="pgdoor-pair"></a>
+
+### A4.5.5. Batched SQL over SHM + Pair
+
+The optional PGDoor batch API in `pgd_client.c` keeps the ordinary result
+arena and adds a separate Pair control mapping. `pgd_pair_start()` starts
+a helper thread that holds a `PGD_PAIR_RUN` Door call for the session.
+The server checks the caller's UID and session/PID, attaches the Pair mapping,
+and signals readiness. The helper does not issue an RPC for each batch. While
+this control call is active the endpoint is dedicated to the Pair client;
+PostgreSQL and SPI still run on the worker's main thread.
+
+`pgd_pair_batch()` publishes up to 16 requests in the shared slot array
+and notifies lane 0. Requests specify result slices in the registered
+arena; the client rejects overlapping slices within a batch. The worker
+uses the existing checked dispatch and direct encoder, stores per-request
+replies, publishes the completion counter and notifies lane 1 after
+finishing the batch. Atomic submission/completion counters order access
+to the slots. The client waits for completion and validates the replies
+before reusing the slots. SQL is still serial on an endpoint; a batch does
+not create one SQL transaction or one PostgreSQL thread per slot.
+
+`pgd_pair_close()` signals the closing state and joins the helper before
+releasing the control mapping. The worker detaches its mapping on exit
+from the Pair loop. The ordinary single-call path remains available.
+The benchmark uses one client per endpoint; it does not establish that
+several Pair clients can share a PostgreSQL worker concurrently. The HTTP
+blog does not use this batch API. See the [SQL campaign](02-benchmarks.md#pgdoor-pair-benchmarks) for
+results.
+
 <a id="appendix4-6"></a>
 
 ## A4.6. How the HTTP application uses PostgreSQL
@@ -544,9 +575,10 @@ Troubleshooting follows the boundary that failed:
 
 ## A4.8. Source provenance
 
-The architecture above was checked against `door-stack.zip` (9 November
-2026) and `doors_07.11.2026.zip`, which includes the expanded forwarding suite.
-The source files reviewed were:
+The architecture above was checked against the Door Stack implementation.
+The source tree will be hosted in
+[freebsd-doors-demo-apps](https://github.com/eduardsiboshvili/freebsd-doors-demo-apps).
+The paths below are relative to the Door Stack source tree:
 
 - `nginx/ngx_http_door_module.c`
 - `transport/ipc.c`

@@ -174,6 +174,60 @@ One client and one database worker/backend, full byte verification, median of th
 
 Earlier equal-worker scaling, before the direct-encoding campaign: SELECT 1 reached 567744 versus 215502 ops/s at 4:4 and 598412 versus 264853 ops/s at 8:8 (Door versus libpq). The supplied real feed SQL reached 12105 versus 11837 ops/s at 4:4, but 15304 versus 16588 at 8:8. Query execution therefore can dominate or reverse a microbenchmark transport advantage. The direct-encoding and equal-worker campaigns are separate measurements.
 
+<a id="pgdoor-pair-benchmarks"></a>
+
+### PGDoor SHM + Pair: throughput, latency and CPU trade-offs
+
+This is a separate SQL microbenchmark campaign. The layouts use 1, 4 or 8
+clients with one dedicated endpoint per client. Each reported configuration
+has three repetitions and full result-byte verification. The table reports
+median run throughput and median run p99, not a percentile merged across runs.
+Each cell is **operations/s / p99 in µs**. Both Door modes use the same
+direct result encoder. libpq uses the PostgreSQL protocol over a Unix socket.
+
+In Pair mode the client publishes a batch at once. Each SQL statement executes
+separately, in order, on that endpoint's PostgreSQL thread. Timing starts
+at batch submission and meets its completion boundary at client verification
+of the individual result. The server publishes completion for the whole batch;
+this is not an individual SQL execution-time measurement. Compare window 1 to
+the synchronous baseline when asking about single-request cost.
+
+| Clients/workers | SQL case | Direct | Pair w=1 | Pair w=4 | Pair w=8 | Pair w=16 | libpq |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 | SELECT 1 | 97,729 / 14.59 | 61,098 / 27.14 | 167,208 / 36.35 | 222,311 / 59.90 | 230,898 / 97.28 | 40,135 / 39.94 |
+| 1 | 64 B | 95,725 / 14.85 | 62,135 / 23.81 | 160,509 / 34.82 | 213,407 / 55.30 | 218,606 / 100.35 | 39,259 / 41.47 |
+| 1 | 1 KiB | 91,350 / 15.49 | 59,319 / 28.93 | 151,972 / 35.84 | 204,377 / 58.37 | 198,494 / 108.54 | 38,931 / 41.47 |
+| 1 | 16 KiB | 57,168 / 25.09 | 41,692 / 39.42 | 68,936 / 81.92 | 71,256 / 123.90 | 84,845 / 202.75 | 23,749 / 67.58 |
+| 1 | 21 rows × 128 B | 30,537 / 44.54 | 25,663 / 59.39 | 30,124 / 155.65 | 35,982 / 256.00 | 38,921 / 446.46 | 14,443 / 101.38 |
+| 4 | SELECT 1 | 321,098 / 18.43 | 191,349 / 34.30 | 482,949 / 50.18 | 609,358 / 83.97 | 619,614 / 139.26 | 116,362 / 57.34 |
+| 4 | 64 B | 316,770 / 18.43 | 190,305 / 34.30 | 478,360 / 49.15 | 620,705 / 83.97 | 602,696 / 137.22 | 115,671 / 56.83 |
+| 4 | 1 KiB | 300,909 / 19.20 | 182,290 / 35.33 | 449,348 / 54.78 | 549,124 / 90.11 | 562,632 / 147.46 | 112,796 / 56.83 |
+| 4 | 16 KiB | 190,044 / 34.82 | 132,413 / 47.62 | 181,396 / 114.69 | 224,390 / 180.22 | 263,662 / 307.20 | 66,860 / 97.28 |
+| 4 | 21 rows × 128 B | 104,043 / 66.56 | 72,541 / 91.14 | 88,632 / 235.52 | 103,761 / 413.70 | 116,724 / 778.24 | 36,510 / 143.36 |
+| 8 | SELECT 1 | 545,294 / 22.78 | 268,236 / 47.10 | 763,327 / 62.46 | 1,070,345 / 90.11 | 1,196,638 / 147.46 | 165,962 / 73.73 |
+| 8 | 64 B | 522,721 / 23.30 | 266,866 / 46.59 | 748,688 / 62.46 | 1,045,207 / 93.18 | 1,162,425 / 153.60 | 164,456 / 74.75 |
+| 8 | 1 KiB | 512,460 / 24.06 | 261,794 / 47.10 | 704,991 / 65.54 | 968,652 / 98.30 | 1,058,043 / 161.79 | 160,951 / 75.78 |
+| 8 | 16 KiB | 312,852 / 36.86 | 191,200 / 61.95 | 346,840 / 128.00 | 397,716 / 206.85 | 467,983 / 331.78 | 95,666 / 131.07 |
+| 8 | 21 rows × 128 B | 164,427 / 74.75 | 125,329 / 97.28 | 164,152 / 262.14 | 187,986 / 430.08 | 205,994 / 786.43 | 72,907 / 155.65 |
+
+Pair at window 1 was slower than direct in all 15 configurations. Larger
+windows amortize request and completion notifications. At 8:8, window 16
+raised throughput over direct by approximately 119% for SELECT 1, 122% for
+64 B, 106% for 1 KiB, 50% for 16 KiB, and 25% for the 21-row result. The gain
+comes with a higher p99. At 8:8, window 8 delivers about 89% of the SELECT 1
+throughput of window 16, with p99 of 90.11 µs rather than 147.46 µs. At 4:4
+for 64 B, window 8 even leads window 16 (620,705 versus 602,696 ops/s).
+For SELECT 1 at 8:8, the reported client and PostgreSQL CPU medians are
+4.90 and 9.28 µs/op for direct versus 0.92 and 5.38 µs/op for Pair window 16.
+These are sampled CPU costs for the measured client threads and PostgreSQL
+processes, not whole-host CPU.
+
+The campaign did not include the real feed SQL. It demonstrates a throughput
+gain for independent batched SQL, not an HTTP latency or capacity improvement.
+For a deployment decision, measure the real feed at the same offered rate
+and compare both p99 and CPU per successful result. See [A4.5.5](04-modules.md#pgdoor-pair)
+for the protocol.
+
 ## Continue reading
 
 - [A2.7. Complete corrected SHM data](benchmark-data/02-07-corrected-shm.md)

@@ -7,9 +7,12 @@ The [detailed contents](detailed-contents.md) links to individual sections.
 
 ## Start here
 
+- Example programs: [freebsd-doors-examples](https://github.com/eduardsiboshvili/freebsd-doors-examples).
+- Demo applications (the repository will host Door Stack): [freebsd-doors-demo-apps](https://github.com/eduardsiboshvili/freebsd-doors-demo-apps).
+
 - [Programming guide](chapters/14.md) and [Example 26: independent Pair client and server](appendices/03-examples.md#example-26-door-bootstrap).
 - [Forwarding and crash tests](appendices/test-catalog/18.md#forwarding-tests) and [qualification record](appendices/01-kernel-and-qualification.md#contents-a1-9-verified-qualification-record).
-- [Benchmark methodology and results](appendices/02-benchmarks.md), including the [follow-up HTTP RAM results](appendices/02-benchmarks.md#http-ram-follow-up).
+- [Benchmark methodology and results](appendices/02-benchmarks.md), including [HTTP RAM results](appendices/02-benchmarks.md#http-ram-follow-up) and the [PGDoor Pair SQL campaign](appendices/02-benchmarks.md#pgdoor-pair-benchmarks).
 - [nginx and PostgreSQL modules](appendices/04-modules.md) and [local demo setup and benchmark controls](appendices/04-local-demo.md).
 
 ## Chapters
@@ -44,6 +47,11 @@ The [detailed contents](detailed-contents.md) links to individual sections.
 - [15. Verification methodology](chapters/15.md)
 
 ### Part V. Discussion and conclusions
+
+Chapter 16 records the architectural choices and their limits. Chapter 17 then
+compares the completed FreeBSD system with the Solaris/illumos model at the
+source-API, observable-semantics, kernel-integration, and extension levels.
+Chapter 18 summarizes the implemented mechanisms, validation, and scope.
 
 - [16. Design decisions and limitations](chapters/16.md)
 - [17. FreeBSD and illumos implementation differences](chapters/17.md)

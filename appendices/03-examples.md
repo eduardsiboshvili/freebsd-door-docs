@@ -6,6 +6,8 @@
 
 # Appendix 3. Example programs and application patterns
 
+Source repository for the example programs: [freebsd-doors-examples](https://github.com/eduardsiboshvili/freebsd-doors-examples).
+
 The example tree is part of the implementation deliverable. It demonstrates
 how the public ABI, libdoor runtime, NameFS, DoorCTL, descriptor transport,
 persistent SHM, rings, security controls, and lifecycle rules compose into

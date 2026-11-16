@@ -867,6 +867,8 @@ New material: [Pair mechanism](#pair-mechanism) · [Pair programming](#pair-prog
 **[Appendix 2. Benchmark methodology and results](#contents-appendix-2-benchmark-methodology-and-results)**
 
 - [Follow-up HTTP RAM campaign](#http-ram-follow-up)
+- [PGDoor SHM + Pair SQL campaign](#pgdoor-pair-benchmarks)
+
 
 **[Appendix 3. Example programs and application patterns](#contents-appendix-3-example-programs-and-application-patterns)**
 
@@ -886,6 +888,7 @@ New material: [Pair mechanism](#pair-mechanism) · [Pair programming](#pair-prog
 - [A4.3. Application backend: queued and direct dispatch](#appendix4-3)
 - [A4.4. Independent builds and configuration](#appendix4-4)
 - [A4.5. PGDoor extension: PostgreSQL main-thread execution](#appendix4-5)
+  - [A4.5.5. Batched SQL over SHM + Pair](#pgdoor-pair)
 - [A4.6. How the HTTP application uses PostgreSQL](#appendix4-6)
 - [A4.7. Validation, observations, and remaining boundaries](#appendix4-7)
 - [A4.8. Source provenance](#appendix4-8)
@@ -23242,6 +23245,60 @@ One client and one database worker/backend, full byte verification, median of th
 
 Earlier equal-worker scaling, before the direct-encoding campaign: SELECT 1 reached 567744 versus 215502 ops/s at 4:4 and 598412 versus 264853 ops/s at 8:8 (Door versus libpq). The supplied real feed SQL reached 12105 versus 11837 ops/s at 4:4, but 15304 versus 16588 at 8:8. Query execution therefore can dominate or reverse a microbenchmark transport advantage. The direct-encoding and equal-worker campaigns are separate measurements.
 
+<a id="pgdoor-pair-benchmarks"></a>
+
+### PGDoor SHM + Pair: throughput, latency and CPU trade-offs
+
+This is a separate SQL microbenchmark campaign. The layouts use 1, 4 or 8
+clients with one dedicated endpoint per client. Each reported configuration
+has three repetitions and full result-byte verification. The table reports
+median run throughput and median run p99, not a percentile merged across runs.
+Each cell is **operations/s / p99 in µs**. Both Door modes use the same
+direct result encoder. libpq uses the PostgreSQL protocol over a Unix socket.
+
+In Pair mode the client publishes a batch at once. Each SQL statement executes
+separately, in order, on that endpoint's PostgreSQL thread. Timing starts
+at batch submission and meets its completion boundary at client verification
+of the individual result. The server publishes completion for the whole batch;
+this is not an individual SQL execution-time measurement. Compare window 1 to
+the synchronous baseline when asking about single-request cost.
+
+| Clients/workers | SQL case | Direct | Pair w=1 | Pair w=4 | Pair w=8 | Pair w=16 | libpq |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 | SELECT 1 | 97,729 / 14.59 | 61,098 / 27.14 | 167,208 / 36.35 | 222,311 / 59.90 | 230,898 / 97.28 | 40,135 / 39.94 |
+| 1 | 64 B | 95,725 / 14.85 | 62,135 / 23.81 | 160,509 / 34.82 | 213,407 / 55.30 | 218,606 / 100.35 | 39,259 / 41.47 |
+| 1 | 1 KiB | 91,350 / 15.49 | 59,319 / 28.93 | 151,972 / 35.84 | 204,377 / 58.37 | 198,494 / 108.54 | 38,931 / 41.47 |
+| 1 | 16 KiB | 57,168 / 25.09 | 41,692 / 39.42 | 68,936 / 81.92 | 71,256 / 123.90 | 84,845 / 202.75 | 23,749 / 67.58 |
+| 1 | 21 rows × 128 B | 30,537 / 44.54 | 25,663 / 59.39 | 30,124 / 155.65 | 35,982 / 256.00 | 38,921 / 446.46 | 14,443 / 101.38 |
+| 4 | SELECT 1 | 321,098 / 18.43 | 191,349 / 34.30 | 482,949 / 50.18 | 609,358 / 83.97 | 619,614 / 139.26 | 116,362 / 57.34 |
+| 4 | 64 B | 316,770 / 18.43 | 190,305 / 34.30 | 478,360 / 49.15 | 620,705 / 83.97 | 602,696 / 137.22 | 115,671 / 56.83 |
+| 4 | 1 KiB | 300,909 / 19.20 | 182,290 / 35.33 | 449,348 / 54.78 | 549,124 / 90.11 | 562,632 / 147.46 | 112,796 / 56.83 |
+| 4 | 16 KiB | 190,044 / 34.82 | 132,413 / 47.62 | 181,396 / 114.69 | 224,390 / 180.22 | 263,662 / 307.20 | 66,860 / 97.28 |
+| 4 | 21 rows × 128 B | 104,043 / 66.56 | 72,541 / 91.14 | 88,632 / 235.52 | 103,761 / 413.70 | 116,724 / 778.24 | 36,510 / 143.36 |
+| 8 | SELECT 1 | 545,294 / 22.78 | 268,236 / 47.10 | 763,327 / 62.46 | 1,070,345 / 90.11 | 1,196,638 / 147.46 | 165,962 / 73.73 |
+| 8 | 64 B | 522,721 / 23.30 | 266,866 / 46.59 | 748,688 / 62.46 | 1,045,207 / 93.18 | 1,162,425 / 153.60 | 164,456 / 74.75 |
+| 8 | 1 KiB | 512,460 / 24.06 | 261,794 / 47.10 | 704,991 / 65.54 | 968,652 / 98.30 | 1,058,043 / 161.79 | 160,951 / 75.78 |
+| 8 | 16 KiB | 312,852 / 36.86 | 191,200 / 61.95 | 346,840 / 128.00 | 397,716 / 206.85 | 467,983 / 331.78 | 95,666 / 131.07 |
+| 8 | 21 rows × 128 B | 164,427 / 74.75 | 125,329 / 97.28 | 164,152 / 262.14 | 187,986 / 430.08 | 205,994 / 786.43 | 72,907 / 155.65 |
+
+Pair at window 1 was slower than direct in all 15 configurations. Larger
+windows amortize request and completion notifications. At 8:8, window 16
+raised throughput over direct by approximately 119% for SELECT 1, 122% for
+64 B, 106% for 1 KiB, 50% for 16 KiB, and 25% for the 21-row result. The gain
+comes with a higher p99. At 8:8, window 8 delivers about 89% of the SELECT 1
+throughput of window 16, with p99 of 90.11 µs rather than 147.46 µs. At 4:4
+for 64 B, window 8 even leads window 16 (620,705 versus 602,696 ops/s).
+For SELECT 1 at 8:8, the reported client and PostgreSQL CPU medians are
+4.90 and 9.28 µs/op for direct versus 0.92 and 5.38 µs/op for Pair window 16.
+These are sampled CPU costs for the measured client threads and PostgreSQL
+processes, not whole-host CPU.
+
+The campaign did not include the real feed SQL. It demonstrates a throughput
+gain for independent batched SQL, not an HTTP latency or capacity improvement.
+For a deployment decision, measure the real feed at the same offered rate
+and compare both p99 and CPU per successful result. See [A4.5.5](#pgdoor-pair)
+for the protocol.
+
 ## A2.7. Complete corrected SHM data
 
 All rows have five repetitions and stream/fixed semantics. Rates are rounded to whole operations/s; latency columns are microseconds. Pair uses 128 slots per client.
@@ -24803,11 +24860,6 @@ These 1335 rows retain original engine/test keys and numeric values; original ma
 
 ## A2.9. Source artifacts and repeatability
 
-- `ipc-monograph-179352473100002.md`
-- `Вставленный текст(20261102-074858).txt`
-- `Вставленный текст(20261102-082553).txt`
-- `Вставленный текст (2)(20261102-082606).txt`
-
 For corrected Pair reruns use `tools/ipc-suite.py --scope 3 --transport 25` (Ring) or `26` (Pool reuse), and `34` for ordinary SHM+futex. Supply `--config`, a new `--directory`, and `--clients 8 --workers 4 --slots 128 --window 32 --max-bytes 16384 --operations 100000 --warmup 1000 --repeats 5`. Record matching installed kernel/libdoor/headers, build options, placement, and the full `results.jsonl` and `summary.json` files. Run variants sequentially without concurrent benchmark load. A future confidence-oriented campaign should alternate/randomize methods and retain complete raw timing and process counters.
 
 ---
@@ -24817,6 +24869,8 @@ For corrected Pair reruns use `tools/ipc-suite.py --scope 3 --transport 25` (Rin
 <a id="contents-appendix-3-example-programs-and-application-patterns"></a>
 
 # Appendix 3. Example programs and application patterns
+
+Source repository for the example programs: [freebsd-doors-examples](https://github.com/eduardsiboshvili/freebsd-doors-examples).
 
 The example tree is part of the implementation deliverable. It demonstrates
 how the public ABI, libdoor runtime, NameFS, DoorCTL, descriptor transport,
@@ -25483,13 +25537,14 @@ code does; deployment qualification and benchmarks remain separate records.
 | Database adapter | `app/pgsql_service.c`, `pgsql_door.inc` | SQL statements, read-path selection, result-to-JSON conversion |
 | PGDoor server | `postgres/pg_door.c` | Background workers, raw Door receive loop, sessions, SPI transactions |
 | PGDoor encoding/mapping | `postgres/pgd_encode.h`, `pgd_mapping.h`, `pgd_params.h` | Checked cell encoding, shared-mapping references, typed values |
-| PGDoor library | `postgres/pgd_client.c`, `pgd_client.h`, `pgd_wire.h` | Connection/arena registration, bounded query calls, cell framing |
+| PGDoor library | `postgres/pgd_client.c`, `pgd_client.h`, `pgd_wire.h`, `pgd_pair.h` | Connection and arena registration, synchronous and batched queries, cell framing |
 | Build/config/lifecycle | `tools/build-nginx.py`, `build-app.py`, `app_config.py`, `stack.py` | Independent builds, TOML translation, coordinated app/nginx startup |
 
 The important boundaries are HTTP client↔nginx, nginx↔application, and
-application↔database. Pair is currently used on the second boundary. The
-implemented PGDoor path uses synchronous CALL plus persistent result SHM on the
-third. It does **not** use Pair to execute PostgreSQL queries.
+application↔database. Pair is currently used on the second boundary. On the third
+boundary, ordinary PGDoor uses synchronous CALL plus persistent result SHM.
+A separate PGDoor mode batches SQL over SHM + Pair; the HTTP blog does not
+use that mode.
 
 ```mermaid
 flowchart TD
@@ -25896,6 +25951,36 @@ or an arena belonging to a different Door generation. `pgd_result_data()` return
 a borrowed pointer valid only while the arena/range is retained and not reused.
 See the complete typed-parameter client in §14.20.
 
+<a id="pgdoor-pair"></a>
+
+### A4.5.5. Batched SQL over SHM + Pair
+
+The optional PGDoor batch API in `pgd_client.c` keeps the ordinary result
+arena and adds a separate Pair control mapping. `pgd_pair_start()` starts
+a helper thread that holds a `PGD_PAIR_RUN` Door call for the session.
+The server checks the caller's UID and session/PID, attaches the Pair mapping,
+and signals readiness. The helper does not issue an RPC for each batch. While
+this control call is active the endpoint is dedicated to the Pair client;
+PostgreSQL and SPI still run on the worker's main thread.
+
+`pgd_pair_batch()` publishes up to 16 requests in the shared slot array
+and notifies lane 0. Requests specify result slices in the registered
+arena; the client rejects overlapping slices within a batch. The worker
+uses the existing checked dispatch and direct encoder, stores per-request
+replies, publishes the completion counter and notifies lane 1 after
+finishing the batch. Atomic submission/completion counters order access
+to the slots. The client waits for completion and validates the replies
+before reusing the slots. SQL is still serial on an endpoint; a batch does
+not create one SQL transaction or one PostgreSQL thread per slot.
+
+`pgd_pair_close()` signals the closing state and joins the helper before
+releasing the control mapping. The worker detaches its mapping on exit
+from the Pair loop. The ordinary single-call path remains available.
+The benchmark uses one client per endpoint; it does not establish that
+several Pair clients can share a PostgreSQL worker concurrently. The HTTP
+blog does not use this batch API. See the [SQL campaign](#pgdoor-pair-benchmarks) for
+results.
+
 <a id="appendix4-6"></a>
 
 ## A4.6. How the HTTP application uses PostgreSQL
@@ -25995,9 +26080,10 @@ Troubleshooting follows the boundary that failed:
 
 ## A4.8. Source provenance
 
-The architecture above was checked against `door-stack.zip` (9 November
-2026) and `doors_07.11.2026.zip`, which includes the expanded forwarding suite.
-The source files reviewed were:
+The architecture above was checked against the Door Stack implementation.
+The source tree will be hosted in
+[freebsd-doors-demo-apps](https://github.com/eduardsiboshvili/freebsd-doors-demo-apps).
+The paths below are relative to the Door Stack source tree:
 
 - `nginx/ngx_http_door_module.c`
 - `transport/ipc.c`
@@ -26019,6 +26105,8 @@ not exhaustive qualification of every shutdown or callback interleaving.
 
 ## A4.9. Local demo installation and application routes
 
+The Door Stack described here will be hosted in [freebsd-doors-demo-apps](https://github.com/eduardsiboshvili/freebsd-doors-demo-apps).
+
 The bundled Door Stack is a local development demo. Install the matching
 Door-enabled FreeBSD kernel, headers and libdoor, then boot that kernel.
 From the extracted stack, run as root on a development host or VM:
@@ -26026,7 +26114,7 @@ From the extracted stack, run as root on a development host or VM:
 ```sh
 make install
 sh ./demo.sh status
-curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8083/health
 ```
 
 `make install` invokes `install-demo.sh`, checks that a Door can be created,
@@ -26037,8 +26125,8 @@ and IPC/HTTP benchmarks. The generated configuration is
 `conf/demo-application.toml` and `conf/demo-nginx.conf`. The installer keeps
 its token, SQLite state, uploads and benchmark artifacts separate from the
 manual stack. It prints the administrative token on an interactive terminal;
-the default file is `state/demo-admin-token`. Keep the demo on loopback or a
-trusted local network.
+the default file is `state/demo-admin-token`. The default listener is `*:8083`; restrict access to
+loopback or a trusted local network.
 
 | Route | Application responsibility |
 |---|---|
@@ -26060,7 +26148,7 @@ managed demo keeps the blog on libpq. An external deployment can use a
 separate cluster or select its own single pool profile.
 
 Initial provisioning and the UI's **Create/refill the test database**
-and **Apply the PGDoor profile to PostgreSQL** apply the profile, restart
+and **Apply PGDoor profile / restart demo PostgreSQL** apply the profile, restart
 only the installer-managed cluster, and probe the Door workers before
 reporting readiness. Active connections to that cluster may be
 interrupted. An ordinary benchmark job does not restart PostgreSQL;
@@ -26077,7 +26165,14 @@ fails, check the exact listener and response body, then
 `state/application.log` and `state/demo-nginx/nginx-error.log`. If the API
 accepted the job, inspect `job-*/output.log` below the configured
 `[benchmarks].results` path (default `state/demo-results`). A system nginx
-on port 80 and the demo nginx on port 8080 are different listeners.
+on port 80 and the demo nginx on port 8083 are different listeners.
+
+On `/pgbench/`, select **PGDoor — SHM + Pair** or
+**Compare direct, Pair and libpq**, then choose window 1, 4, 8 or 16.
+The UI matches endpoint count to client count and checks Pair readiness before
+timing. Large results may require a smaller window to fit the configured result
+arena. Restart PostgreSQL after installing the extension with Pair support.
+Once it is loaded, switching benchmark modes does not require another restart.
 
 <a id="appendix4-10"></a>
 
@@ -26088,7 +26183,7 @@ on port 80 and the demo nginx on port 8080 are different listeners.
 | Direct ping | Separate no-data and payload cases: synchronous ping-pong, ONEWAY with inline or SHM data, and native async cases supported by the runner. | Payload, clients, servers, CPU placement, in-flight window and warmup. Keep ONEWAY submission distinct from verified completion. |
 | IPC matrix | Unix stream/datagram/seqpacket, loopback TCP/UDP, pipe and SHM/kqueue baselines, plus Door CALL, ONEWAY, async and SHM variants. | Single transport or matrix; report the effective worker topology and window, not just requested values. |
 | SHM | Ring + batched CALL; Ring + Pair; Pool + Pair reserve/release; Pool reuse + Pair; SHM CALL/async; fixed-stream M:N Ring/Pool reuse + Pair; POSIX SHM + process-shared umtx/futex baseline. | Payload, flow, profile, slots, window, client and worker counts and CPU lists. M:N Pair and the futex baseline use fixed-stream payloads; unsupported selections are disabled. |
-| SQL | `door`, `door-direct` and libpq over a Unix socket. SQL ping-pong is `SELECT 'pong'::text`; other cases are SELECT 1, text up to 8 MiB, 21 rows × 128 bytes, and a deterministic feed. | Run one scenario or the suite; match client and endpoint counts where possible. Identity and result-equivalence probes are outside timing. |
+| SQL | `door`, `door-direct`, `door-pair` and libpq over a Unix socket. SQL ping-pong is `SELECT 'pong'::text`; other cases are SELECT 1, text up to 8 MiB, 21 rows × 128 bytes, and a deterministic feed. | Run one scenario or the suite; match client and endpoint counts where possible. Identity and result-equivalence probes are outside timing. |
 | HTTP | Closed-loop HTTP RAM capacity, or scheduled-rate HTTP blog traffic with PostgreSQL. | Match payload, generator threads, connections and benchmark duration. For the SQL-backed HTTP test, also match the account set, depth, mix and offered rate. |
 
 The finite full plan has no overall deadline. The continuous plan repeats
@@ -26116,7 +26211,7 @@ native FreeBSD checks in addition to the portable suite:
 make -C benchmarks/door-direct-ping check
 make -C benchmarks/shm-transport-bench check-mt
 make -C benchmarks/shm-transport-bench check-futex
-python3 app/pgsql/smoke.py http://127.0.0.1:8080
+python3 app/pgsql/smoke.py http://127.0.0.1:8083
 ```
 
 The blog smoke command assumes the demo is running on its default port

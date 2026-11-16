@@ -4,6 +4,8 @@
 
 ## A4.9. Local demo installation and application routes
 
+The Door Stack described here will be hosted in [freebsd-doors-demo-apps](https://github.com/eduardsiboshvili/freebsd-doors-demo-apps).
+
 The bundled Door Stack is a local development demo. Install the matching
 Door-enabled FreeBSD kernel, headers and libdoor, then boot that kernel.
 From the extracted stack, run as root on a development host or VM:
@@ -11,7 +13,7 @@ From the extracted stack, run as root on a development host or VM:
 ```sh
 make install
 sh ./demo.sh status
-curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8083/health
 ```
 
 `make install` invokes `install-demo.sh`, checks that a Door can be created,
@@ -22,8 +24,8 @@ and IPC/HTTP benchmarks. The generated configuration is
 `conf/demo-application.toml` and `conf/demo-nginx.conf`. The installer keeps
 its token, SQLite state, uploads and benchmark artifacts separate from the
 manual stack. It prints the administrative token on an interactive terminal;
-the default file is `state/demo-admin-token`. Keep the demo on loopback or a
-trusted local network.
+the default file is `state/demo-admin-token`. The default listener is `*:8083`; restrict access to
+loopback or a trusted local network.
 
 | Route | Application responsibility |
 |---|---|
@@ -45,7 +47,7 @@ managed demo keeps the blog on libpq. An external deployment can use a
 separate cluster or select its own single pool profile.
 
 Initial provisioning and the UI's **Create/refill the test database**
-and **Apply the PGDoor profile to PostgreSQL** apply the profile, restart
+and **Apply PGDoor profile / restart demo PostgreSQL** apply the profile, restart
 only the installer-managed cluster, and probe the Door workers before
 reporting readiness. Active connections to that cluster may be
 interrupted. An ordinary benchmark job does not restart PostgreSQL;
@@ -62,7 +64,14 @@ fails, check the exact listener and response body, then
 `state/application.log` and `state/demo-nginx/nginx-error.log`. If the API
 accepted the job, inspect `job-*/output.log` below the configured
 `[benchmarks].results` path (default `state/demo-results`). A system nginx
-on port 80 and the demo nginx on port 8080 are different listeners.
+on port 80 and the demo nginx on port 8083 are different listeners.
+
+On `/pgbench/`, select **PGDoor — SHM + Pair** or
+**Compare direct, Pair and libpq**, then choose window 1, 4, 8 or 16.
+The UI matches endpoint count to client count and checks Pair readiness before
+timing. Large results may require a smaller window to fit the configured result
+arena. Restart PostgreSQL after installing the extension with Pair support.
+Once it is loaded, switching benchmark modes does not require another restart.
 
 <a id="appendix4-10"></a>
 
@@ -73,7 +82,7 @@ on port 80 and the demo nginx on port 8080 are different listeners.
 | Direct ping | Separate no-data and payload cases: synchronous ping-pong, ONEWAY with inline or SHM data, and native async cases supported by the runner. | Payload, clients, servers, CPU placement, in-flight window and warmup. Keep ONEWAY submission distinct from verified completion. |
 | IPC matrix | Unix stream/datagram/seqpacket, loopback TCP/UDP, pipe and SHM/kqueue baselines, plus Door CALL, ONEWAY, async and SHM variants. | Single transport or matrix; report the effective worker topology and window, not just requested values. |
 | SHM | Ring + batched CALL; Ring + Pair; Pool + Pair reserve/release; Pool reuse + Pair; SHM CALL/async; fixed-stream M:N Ring/Pool reuse + Pair; POSIX SHM + process-shared umtx/futex baseline. | Payload, flow, profile, slots, window, client and worker counts and CPU lists. M:N Pair and the futex baseline use fixed-stream payloads; unsupported selections are disabled. |
-| SQL | `door`, `door-direct` and libpq over a Unix socket. SQL ping-pong is `SELECT 'pong'::text`; other cases are SELECT 1, text up to 8 MiB, 21 rows × 128 bytes, and a deterministic feed. | Run one scenario or the suite; match client and endpoint counts where possible. Identity and result-equivalence probes are outside timing. |
+| SQL | `door`, `door-direct`, `door-pair` and libpq over a Unix socket. SQL ping-pong is `SELECT 'pong'::text`; other cases are SELECT 1, text up to 8 MiB, 21 rows × 128 bytes, and a deterministic feed. | Run one scenario or the suite; match client and endpoint counts where possible. Identity and result-equivalence probes are outside timing. |
 | HTTP | Closed-loop HTTP RAM capacity, or scheduled-rate HTTP blog traffic with PostgreSQL. | Match payload, generator threads, connections and benchmark duration. For the SQL-backed HTTP test, also match the account set, depth, mix and offered rate. |
 
 The finite full plan has no overall deadline. The continuous plan repeats
@@ -101,7 +110,7 @@ native FreeBSD checks in addition to the portable suite:
 make -C benchmarks/door-direct-ping check
 make -C benchmarks/shm-transport-bench check-mt
 make -C benchmarks/shm-transport-bench check-futex
-python3 app/pgsql/smoke.py http://127.0.0.1:8080
+python3 app/pgsql/smoke.py http://127.0.0.1:8083
 ```
 
 The blog smoke command assumes the demo is running on its default port

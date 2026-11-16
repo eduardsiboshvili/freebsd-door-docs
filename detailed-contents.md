@@ -67,7 +67,7 @@ review; Appendix 2 contains the measurement methodology.
 
 New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programming](chapters/14.md#pair-programming) · [Pair test invariants](appendices/test-catalog/17.md#pair-tests) · [Pair client/server example](appendices/03-examples.md#pair-examples)
 
-**[Part I. Problem statement and requirements](parts/part-1.md#contents-part-i-problem-statement-and-requirements)**
+**[Part I. Problem statement and requirements](door-ipc-implementation-for-freebsd_full.md#contents-part-i-problem-statement-and-requirements)**
 
 **[1. Introduction](chapters/01.md#contents-chapter-1-introduction)**
 
@@ -181,7 +181,7 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
   - [3.5.5. Assumptions and exclusions](chapters/03.md#contents-ch3-3-5-5-assumptions-and-exclusions)
   - [3.5.6. Security failure criteria](chapters/03.md#contents-ch3-3-5-6-security-failure-criteria)
 
-**[Part II. Architecture and implementation](parts/part-2.md#contents-part-ii-architecture-and-implementation)**
+**[Part II. Architecture and implementation](door-ipc-implementation-for-freebsd_full.md#contents-part-ii-architecture-and-implementation)**
 
 **[4. System architecture](chapters/04.md#contents-chapter-4-system-architecture)**
 
@@ -535,7 +535,7 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
   - [9.11.2. Library protocol over ONEWAY](chapters/09.md#contents-ch9-9-11-2-library-protocol-over-oneway)
   - [9.11.3. Pending admission and callback execution](chapters/09.md#contents-ch9-9-11-3-pending-admission-and-callback-execution)
 
-**[Part III. Observable semantics and correctness](parts/part-3.md#contents-part-iii-observable-semantics-and-correctness)**
+**[Part III. Observable semantics and correctness](door-ipc-implementation-for-freebsd_full.md#contents-part-iii-observable-semantics-and-correctness)**
 
 **[10. ABI and operation semantics](chapters/10.md#contents-chapter-10-abi-and-operation-semantics)**
 
@@ -710,7 +710,7 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
 - [13.7. Security invariants and coverage](chapters/13.md#contents-13-7-security-invariants-and-coverage)
   - [Native async and page-view authority](chapters/13.md#contents-ch13-native-async-and-page-view-authority)
 
-**[Part IV. Programming and verification](parts/part-4.md#contents-part-iv-programming-and-verification)**
+**[Part IV. Programming and verification](door-ipc-implementation-for-freebsd_full.md#contents-part-iv-programming-and-verification)**
 
 **[14. Programming guide](chapters/14.md#contents-chapter-14-programming-guide)**
 
@@ -785,7 +785,7 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
 - [15.6. Correctness and performance evidence](chapters/15.md#contents-15-6-correctness-and-performance-evidence)
 - [15.7. Release qualification](chapters/15.md#contents-15-7-release-qualification)
 
-**[Part V. Discussion and conclusions](parts/part-5.md#contents-part-v-discussion-and-conclusions)**
+**[Part V. Discussion and conclusions](door-ipc-implementation-for-freebsd_full.md#contents-part-v-discussion-and-conclusions)**
 
 **[16. Design decisions and limitations](chapters/16.md#contents-chapter-16-design-decisions-and-limitations)**
 
@@ -869,6 +869,8 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
 **[Appendix 2. Benchmark methodology and results](appendices/02-benchmarks.md#contents-appendix-2-benchmark-methodology-and-results)**
 
 - [Follow-up HTTP RAM campaign](appendices/02-benchmarks.md#http-ram-follow-up)
+- [PGDoor SHM + Pair SQL campaign](appendices/02-benchmarks.md#pgdoor-pair-benchmarks)
+
 
 **[Appendix 3. Example programs and application patterns](appendices/03-examples.md#contents-appendix-3-example-programs-and-application-patterns)**
 
@@ -888,6 +890,7 @@ New material: [Pair mechanism](chapters/06.md#pair-mechanism) · [Pair programmi
 - [A4.3. Application backend: queued and direct dispatch](appendices/04-modules.md#appendix4-3)
 - [A4.4. Independent builds and configuration](appendices/04-modules.md#appendix4-4)
 - [A4.5. PGDoor extension: PostgreSQL main-thread execution](appendices/04-modules.md#appendix4-5)
+  - [A4.5.5. Batched SQL over SHM + Pair](appendices/04-modules.md#pgdoor-pair)
 - [A4.6. How the HTTP application uses PostgreSQL](appendices/04-modules.md#appendix4-6)
 - [A4.7. Validation, observations, and remaining boundaries](appendices/04-modules.md#appendix4-7)
 - [A4.8. Source provenance](appendices/04-modules.md#appendix4-8)
